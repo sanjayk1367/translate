@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Auto Language Translator</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 700px; margin: auto; }
+    .card { border: 1px solid #ddd; padding: 18px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
+    input[type=file] { display:block; margin-bottom: 12px; }
+    select, button { padding: 8px 12px; margin-top: 8px; }
+    .note { color: #555; font-size: 0.9em; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h2>Auto Language Translator (Python + Flask)</h2>
+
+  <div class="card">
+    <form method="POST" enctype="multipart/form-data">
+      <label>Choose file (PDF or DOCX):</label>
+      <input type="file" name="file" accept=".pdf,.docx" required />
+
+      <label>Select language:</label><br/>
+      <select name="language" required>
+        {% for code, name in languages %}
+          <option value="{{code}}">{{name}} ({{code}})</option>
+        {% endfor %}
+      </select>
+
+      <div style="margin-top:10px;">
+        <label>Output format:</label><br/>
+        <input type="radio" name="out_format" value="docx" checked /> DOCX
+        <input type="radio" name="out_format" value="pdf" style="margin-left:10px;" /> PDF
+      </div>
+
+      <div style="margin-top:14px;">
+        <button type="submit">Translate & Download</button>
+      </div>
+    </form>
+
+    <p class="note">
+      Note: For accurate Indic script rendering in PDF choose PDF only if you placed a Unicode TTF (e.g. NotoSansDevanagari) in the <code>fonts/</code> folder and named it <code>NotoSansDevanagari-Regular.ttf</code>.
+      If not, prefer DOCX which preserves Unicode well.
+    </p>
+  </div>
+</body>
+</html>
