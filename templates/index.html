@@ -1,47 +1,55 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-  <meta charset="utf-8" />
-  <title>Auto Language Translator</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; max-width: 700px; margin: auto; }
-    .card { border: 1px solid #ddd; padding: 18px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); }
-    input[type=file] { display:block; margin-bottom: 12px; }
-    select, button { padding: 8px 12px; margin-top: 8px; }
-    .note { color: #555; font-size: 0.9em; margin-top: 12px; }
-  </style>
+    <title>Document Translator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 700px;
+            margin: auto;
+            padding: 20px;
+        }
+        h2 { text-align: center; }
+        form { display: flex; flex-direction: column; gap: 15px; }
+        label { font-weight: bold; }
+        input[type="file"], select, button { padding: 8px; font-size: 14px; }
+        button { cursor: pointer; background-color: #007BFF; color: white; border: none; }
+        button:hover { background-color: #0056b3; }
+        .flash { color: red; font-weight: bold; }
+    </style>
 </head>
 <body>
-  <h2>Auto Language Translator (Python + Flask)</h2>
+    <h2>Document Translator</h2>
 
-  <div class="card">
+    <!-- Display flash messages -->
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash">
+          {% for message in messages %}
+            <p>{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
     <form method="POST" enctype="multipart/form-data">
-      <label>Choose file (PDF or DOCX):</label>
-      <input type="file" name="file" accept=".pdf,.docx" required />
+        <label for="file">Upload PDF or DOCX:</label>
+        <input type="file" name="file" id="file" required>
 
-      <label>Select language:</label><br/>
-      <select name="language" required>
-        {% for code, name in languages %}
-          <option value="{{code}}">{{name}} ({{code}})</option>
-        {% endfor %}
-      </select>
+        <label for="language">Select Target Language:</label>
+        <select name="language" id="language" required>
+            {% for code, name in languages %}
+                <option value="{{ code }}">{{ name }}</option>
+            {% endfor %}
+        </select>
 
-      <div style="margin-top:10px;">
-        <label>Output format:</label><br/>
-        <input type="radio" name="out_format" value="docx" checked /> DOCX
-        <input type="radio" name="out_format" value="pdf" style="margin-left:10px;" /> PDF
-      </div>
+        <label for="out_format">Output Format:</label>
+        <select name="out_format" id="out_format">
+            <option value="docx">DOCX</option>
+            <option value="pdf">PDF</option>
+        </select>
 
-      <div style="margin-top:14px;">
         <button type="submit">Translate & Download</button>
-      </div>
     </form>
-
-    <p class="note">
-      Note: For accurate Indic script rendering in PDF choose PDF only if you placed a Unicode TTF (e.g. NotoSansDevanagari) in the <code>fonts/</code> folder and named it <code>NotoSansDevanagari-Regular.ttf</code>.
-      If not, prefer DOCX which preserves Unicode well.
-    </p>
-  </div>
 </body>
 </html>

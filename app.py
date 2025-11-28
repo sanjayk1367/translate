@@ -1,4 +1,5 @@
 import os
+import traceback
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 from deep_translator import GoogleTranslator
@@ -9,67 +10,69 @@ from reportlab.pdfgen import canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
+# -------------------------
+# Logging helper
+# -------------------------
+def log(step, *msg):
+    print(f"[DEBUG] {step}:", *msg)
 
-from deep_translator import GoogleTranslator
-
-def translate_text(text, dest_lang):
-    translated_chunks = []
-    for ch in chunk_text(text):
-        translated_chunks.append(
-            GoogleTranslator(source="auto", target=dest_lang).translate(ch)
-        )
-    return "\n".join(translated_chunks)
-
-
+# -------------------------
+# Config & folders
+# -------------------------
 ALLOWED_EXT = {'.pdf', '.docx'}
 UPLOAD_FOLDER = 'uploads'
 OUTPUT_FOLDER = 'output'
-FONTS_FOLDER = 'fonts'  # optional: place TTF fonts here for Unicode PDFs
+FONTS_FOLDER = 'fonts'
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 os.makedirs(FONTS_FOLDER, exist_ok=True)
 
 app = Flask(__name__)
-app.secret_key = "change_this_secret_in_prod"
+app.secret_key = "change_this_secret"
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
 
-translator = Translator()
+# Default GoogleTranslator
+translator = GoogleTranslator(source='auto', target='en')
 
-# --- Utility functions --- #
+# Language dropdown
+LANGUAGES = [
+    ('en', 'English'), ('hi', 'Hindi'), ('bn', 'Bengali'), ('gu', 'Gujarati'),
+    ('ta', 'Tamil'), ('te', 'Telugu'), ('ml', 'Malayalam'), ('fr', 'French'),
+    ('de', 'German'), ('es', 'Spanish')
+]
 
+# -------------------------
+# Utility functions
+# -------------------------
 def allowed_file(filename):
     _, ext = os.path.splitext(filename.lower())
     return ext in ALLOWED_EXT
 
 def extract_pdf_text(path):
+    log("EXTRACT_PDF", path)
     reader = PdfReader(path)
-    text_parts = []
+    txt = []
     for page in reader.pages:
-        page_text = page.extract_text()
-        if page_text:
-            text_parts.append(page_text)
-    return "\n".join(text_parts)
+        t = page.extract_text()
+        if t:
+            txt.append(t)
+    return "\n".join(txt)
 
 def extract_docx_text(path):
+    log("EXTRACT_DOCX", path)
     doc = Document(path)
-    parts = []
-    for para in doc.paragraphs:
-        parts.append(para.text)
-    return "\n".join(parts)
+    return "\n".join([p.text for p in doc.paragraphs])
 
 def chunk_text(text, max_chars=4000):
-    """Split text into chunks not exceeding max_chars (preserving whole lines when possible)."""
     if len(text) <= max_chars:
         return [text]
     lines = text.splitlines(True)
-    chunks = []
-    cur = ""
+    chunks, cur = [], ""
     for ln in lines:
         if len(cur) + len(ln) > max_chars:
-            if cur:
-                chunks.append(cur)
+            chunks.append(cur)
             cur = ln
         else:
             cur += ln
@@ -77,169 +80,125 @@ def chunk_text(text, max_chars=4000):
         chunks.append(cur)
     return chunks
 
-def translate_text(text, dest_lang):
-    """Translate large text by chunking to avoid limits."""
-    chunks = chunk_text(text, max_chars=4000)
-    translated_chunks = []
-    for ch in chunks:
-        # googletrans Translator may accept strings up to a limit; chunking reduces errors
-        res = translator.translate(ch, dest=dest_lang)
-        translated_chunks.append(res.text)
-    return "\n".join(translated_chunks)
+def translate_text(text, lang):
+    log("TRANSLATION", f"Target -> {lang}")
+    translated = []
+    for chunk in chunk_text(text):
+        res = GoogleTranslator(source="auto", target=lang).translate(chunk)
+        translated.append(res)
+    return "\n".join(translated)
 
-def save_as_docx(text, out_path, font_name='NotoSans'):  # font_name used for style, may vary by system
+def save_as_docx(text, path):
+    log("SAVE_DOCX", path)
     doc = Document()
-    style = doc.styles['Normal']
-    font = style.font
-    font.name = font_name
+    font = doc.styles["Normal"].font
+    font.name = "NotoSans"
     font.size = Pt(12)
+    for line in text.split("\n"):
+        doc.add_paragraph(line)
+    doc.save(path)
 
-    for para_text in text.split('\n'):
-        doc.add_paragraph(para_text)
-    doc.save(out_path)
-
-def register_font_if_exists(ttf_filename, font_alias):
-    """If the TTF exists in fonts folder, register with reportlab and return True."""
-    path = os.path.join(FONTS_FOLDER, ttf_filename)
-    if os.path.exists(path):
+def register_font_if_exists(ttf_file, alias):
+    font_path = os.path.join(FONTS_FOLDER, ttf_file)
+    if os.path.exists(font_path):
         try:
-            pdfmetrics.registerFont(TTFont(font_alias, path))
+            pdfmetrics.registerFont(TTFont(alias, font_path))
+            log("FONT", f"Registered -> {alias}")
             return True
         except Exception as e:
-            print("Font register failed:", e)
-            return False
+            log("FONT_ERROR", str(e))
     return False
 
-def save_as_pdf_unicode(text, out_path, font_alias='NotoDeva', fallback_font='Helvetica'):
-    """
-    Save text to PDF. If a registered TrueType font alias is available, use it for Unicode.
-    Otherwise use default (may not render Indic scripts correctly).
-    """
-    use_font = fallback_font
-    if font_alias in pdfmetrics.getRegisteredFontNames():
-        use_font = font_alias
-
-    c = canvas.Canvas(out_path)
-    c.setFont(use_font, 12)
-    width, height = 595, 842  # A4 approx
-    margin = 40
-    y = height - margin
-    line_height = 14
-
-    for paragraph in text.split('\n'):
-        # simple word-wrapping
-        words = paragraph.split(' ')
-        line = ""
-        for w in words:
-            test_line = (line + ' ' + w).strip()
-            if c.stringWidth(test_line, use_font, 12) > (width - 2 * margin):
-                c.drawString(margin, y, line)
-                y -= line_height
-                line = w
-                if y < margin:
-                    c.showPage()
-                    c.setFont(use_font, 12)
-                    y = height - margin
-            else:
-                line = test_line
-        # draw last line
-        if line:
-            c.drawString(margin, y, line)
-            y -= line_height
-        # extra gap after paragraph
-        y -= 4
+def save_as_pdf(text, out_file, font="Helvetica"):
+    log("SAVE_PDF", out_file)
+    c = canvas.Canvas(out_file)
+    c.setFont(font, 12)
+    width, height = 595, 842
+    margin, y, lh = 40, 802, 15
+    for line in text.split("\n"):
+        c.drawString(margin, y, line)
+        y -= lh
         if y < margin:
             c.showPage()
-            c.setFont(use_font, 12)
-            y = height - margin
-
+            c.setFont(font, 12)
+            y = 802
     c.save()
 
-
-# --- Routes --- #
-
+# -------------------------
+# Routes
+# -------------------------
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    if request.method == 'POST':
-        lang = request.form.get('language')
-        file = request.files.get('file')
-        out_format = request.form.get('out_format', 'docx')  # 'docx' or 'pdf'
+    try:
+        if request.method == 'POST':
+            log("REQUEST", "Form submitted")
 
-        if not file or file.filename == '':
-            flash("No file selected")
-            return redirect(request.url)
+            lang = request.form.get('language')
+            fmt = request.form.get('out_format', 'docx')
+            file = request.files.get('file')
 
-        filename = secure_filename(file.filename)
-        if not allowed_file(filename):
-            flash("Unsupported file type. Allowed: .pdf, .docx")
-            return redirect(request.url)
+            log("INPUT_LANG", lang)
+            log("OUTPUT_FORMAT", fmt)
 
-        input_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(input_path)
+            if not file or not allowed_file(file.filename):
+                log("ERROR", "Invalid / no file")
+                flash("Please upload PDF or DOCX file")
+                return redirect('/')
 
-        # Extract text
-        try:
-            if filename.lower().endswith('.pdf'):
+            filename = secure_filename(file.filename)
+            input_path = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(input_path)
+            log("FILE_SAVED", input_path)
+
+            # extract
+            if filename.lower().endswith(".pdf"):
                 text = extract_pdf_text(input_path)
             else:
                 text = extract_docx_text(input_path)
-        except Exception as e:
-            flash("Error extracting text: " + str(e))
-            return redirect(request.url)
+            log("EXTRACTED_TEXT_LENGTH", len(text))
 
-        if not text.strip():
-            flash("No extractable text found in the file. If the PDF is scanned, OCR is required.")
-            return redirect(request.url)
+            if not text.strip():
+                flash("No extractable text found in file. If PDF is scanned, OCR required.")
+                return redirect('/')
 
-        # Translate
-        try:
+            # translate
             translated = translate_text(text, lang)
-        except Exception as e:
-            flash("Translation failed: " + str(e))
-            return redirect(request.url)
+            log("TRANSLATED_TEXT_LENGTH", len(translated))
 
-        base_name = os.path.splitext(filename)[0]
-        safe_base = secure_filename(base_name)
-        if out_format == 'docx':
-            out_filename = f"{safe_base}_translated_{lang}.docx"
-            out_path = os.path.join(app.config['OUTPUT_FOLDER'], out_filename)
-            save_as_docx(translated, out_path)
-        else:
-            # Try to register a font (user can place a TTF in fonts/ directory and name it here)
-            # Example: place 'NotoSansDevanagari-Regular.ttf' in fonts/ and call register_font_if_exists with that name.
-            # We'll attempt common fonts if present.
-            # You can change ttf_name to the actual file you put in fonts folder.
-            ttf_name = 'NotoSansDevanagari-Regular.ttf'
-            registered = register_font_if_exists(ttf_name, 'NotoDeva')
-            out_filename = f"{safe_base}_translated_{lang}.pdf"
-            out_path = os.path.join(app.config['OUTPUT_FOLDER'], out_filename)
-            if registered:
-                save_as_pdf_unicode(translated, out_path, font_alias='NotoDeva')
+            base = os.path.splitext(filename)[0]
+            out_file = f"{secure_filename(base)}_translated_{lang}.{fmt}"
+            out_path = os.path.join(OUTPUT_FOLDER, out_file)
+
+            if fmt == "docx":
+                save_as_docx(translated, out_path)
             else:
-                # fallback: use default font (may not render complex scripts)
-                save_as_pdf_unicode(translated, out_path, font_alias='Helvetica')
+                registered = register_font_if_exists("NotoSansDevanagari-Regular.ttf", "NotoDeva")
+                save_as_pdf(translated, out_path, font=("NotoDeva" if registered else "Helvetica"))
 
-        return render_template('result.html', download_url=url_for('download_file', filename=out_filename))
+            log("OUTPUT_SAVED", out_path)
+            return render_template("result.html", download_url=url_for('download_file', filename=out_file))
 
-    # GET
-    languages = [
-        ('en', 'English'), ('hi', 'Hindi'), ('bn', 'Bengali'), ('gu', 'Gujarati'),
-        ('ta', 'Tamil'), ('te', 'Telugu'), ('ml', 'Malayalam'), ('fr', 'French'),
-        ('de', 'German'), ('es', 'Spanish')
-    ]
-    return render_template('index.html', languages=languages)
+        return render_template("index.html", languages=LANGUAGES)
 
+    except Exception as e:
+        log("FATAL_ERROR", str(e))
+        traceback.print_exc()
+        flash("CRITICAL ERROR: " + str(e))
+        return redirect('/')
 
-@app.route('/download/<path:filename>')
+@app.route('/download/<filename>')
 def download_file(filename):
-    path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
+    path = os.path.join(OUTPUT_FOLDER, filename)
     if os.path.exists(path):
+        log("DOWNLOAD", path)
         return send_file(path, as_attachment=True)
     else:
-        flash("File not found")
-        return redirect(url_for('index'))
+        flash("File not found.")
+        return redirect('/')
 
-
+# -------------------------
+# Main
+# -------------------------
 if __name__ == '__main__':
-    # debug=True only for development
+    log("SERVER", "App started on http://127.0.0.1:5000")
     app.run(host='0.0.0.0', port=5000, debug=True)
