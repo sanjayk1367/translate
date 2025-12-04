@@ -1,55 +1,48 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Document Translator</title>
+    <meta charset="UTF-8">
+    <title>File Translator</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 700px;
-            margin: auto;
-            padding: 20px;
-        }
-        h2 { text-align: center; }
-        form { display: flex; flex-direction: column; gap: 15px; }
-        label { font-weight: bold; }
-        input[type="file"], select, button { padding: 8px; font-size: 14px; }
-        button { cursor: pointer; background-color: #007BFF; color: white; border: none; }
-        button:hover { background-color: #0056b3; }
-        .flash { color: red; font-weight: bold; }
+        body { font-family: Arial, sans-serif; margin: 50px; }
+        .container { max-width: 500px; margin: auto; }
+        input, select, button { width: 100%; padding: 10px; margin: 10px 0; }
     </style>
 </head>
 <body>
-    <h2>Document Translator</h2>
+    <div class="container">
+        <h2>Upload File to Translate</h2>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <ul style="color:red;">
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+        <form method="POST" enctype="multipart/form-data">
+            <label>Select File (PDF or DOCX):</label>
+            <input type="file" name="file" required>
 
-    <!-- Display flash messages -->
-    {% with messages = get_flashed_messages() %}
-      {% if messages %}
-        <div class="flash">
-          {% for message in messages %}
-            <p>{{ message }}</p>
-          {% endfor %}
-        </div>
-      {% endif %}
-    {% endwith %}
+            <label>Select Target Language:</label>
+            <select name="language" required>
+                <option value="en">English</option>
+                <option value="hi">Hindi</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+                <option value="de">German</option>
+                <option value="zh">Chinese</option>
+            </select>
 
-    <form method="POST" enctype="multipart/form-data">
-        <label for="file">Upload PDF or DOCX:</label>
-        <input type="file" name="file" id="file" required>
+            <label>Select Output Format:</label>
+            <select name="format" required>
+                <option value="docx">DOCX</option>
+                <option value="pdf">PDF</option>
+            </select>
 
-        <label for="language">Select Target Language:</label>
-        <select name="language" id="language" required>
-            {% for code, name in languages %}
-                <option value="{{ code }}">{{ name }}</option>
-            {% endfor %}
-        </select>
-
-        <label for="out_format">Output Format:</label>
-        <select name="out_format" id="out_format">
-            <option value="docx">DOCX</option>
-            <option value="pdf">PDF</option>
-        </select>
-
-        <button type="submit">Translate & Download</button>
-    </form>
+            <button type="submit">Translate & Download</button>
+        </form>
+    </div>
 </body>
 </html>
