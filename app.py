@@ -1,11 +1,7 @@
 import os
-import io
 import textwrap
-import subprocess
-import tempfile
 from pathlib import Path
 
-import pymupdf
 from flask import Flask, render_template, request, send_file, redirect, url_for, flash
 from werkzeug.utils import secure_filename
 from deep_translator import GoogleTranslator
@@ -29,19 +25,10 @@ OUTPUT_FOLDER.mkdir(exist_ok=True)
 TEMPLATES_FOLDER.mkdir(exist_ok=True)
 
 app = Flask(__name__, template_folder=str(TEMPLATES_FOLDER))
-app.secret_key = "change-this-secret-key"
+app.secret_key = "super-secret-key-change-this"
 
 app.config["UPLOAD_FOLDER"] = str(UPLOAD_FOLDER)
 app.config["OUTPUT_FOLDER"] = str(OUTPUT_FOLDER)
-
-TESSERACT_PATH = os.environ.get(
-    "TESSERACT_PATH",
-    r"C:\Program Files\Tesseract-OCR\tesseract.exe"
-)
-
-
-def debug(msg: str) -> None:
-    print(f"[DEBUG] {msg}")
 
 
 def allowed_file(filename: str) -> bool:
@@ -49,69 +36,18 @@ def allowed_file(filename: str) -> bool:
 
 
 def extract_text_from_pdf(file_path: str) -> str:
-    debug(f"Trying normal PDF extraction: {file_path}")
     text_parts = []
     reader = PdfReader(file_path)
 
-    for i, page in enumerate(reader.pages, start=1):
+    for page in reader.pages:
         page_text = page.extract_text() or ""
-        debug(f"Page {i}: extracted {len(page_text)} chars")
         if page_text.strip():
             text_parts.append(page_text)
 
     return "\n".join(text_parts).strip()
 
 
-def run_tesseract_on_png(png_path: str, lang: str = "eng+hin") -> str:
-    if not Path(TESSERACT_PATH).exists():
-        raise RuntimeError(
-            f"Tesseract not found at: {TESSERACT_PATH}. "
-            "Install Tesseract OCR or set TESSERACT_PATH."
-        )
-
-    command = [
-        TESSERACT_PATH,
-        png_path,
-        "stdout",
-        "-l",
-        lang,
-    ]
-
-    result = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="ignore"
-    )
-
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "Tesseract OCR failed.")
-
-    return result.stdout.strip()
-
-
-def ocr_extract_text_from_pdf(file_path: str) -> str:
-    debug(f"Trying OCR with PyMuPDF: {file_path}")
-    text_parts = []
-
-    with pymupdf.open(file_path) as doc:
-        with tempfile.TemporaryDirectory() as temp_dir:
-            for i, page in enumerate(doc, start=1):
-                pix = page.get_pixmap(dpi=300)
-                png_path = Path(temp_dir) / f"page_{i}.png"
-                pix.save(str(png_path))
-
-                debug(f"OCR page {i}")
-                text = run_tesseract_on_png(str(png_path), lang="eng+hin")
-                if text.strip():
-                    text_parts.append(text)
-
-    return "\n".join(text_parts).strip()
-
-
 def extract_text_from_docx(file_path: str) -> str:
-    debug(f"Reading DOCX: {file_path}")
     doc = Document(file_path)
     text_parts = []
 
@@ -123,17 +59,14 @@ def extract_text_from_docx(file_path: str) -> str:
 
 
 def translate_long_text(text: str, target_lang: str) -> str:
-    debug(f"Translating to: {target_lang}")
-
     if not text.strip():
         raise ValueError("No readable text found in file.")
 
     chunk_size = 3000
     chunks = [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
-    translated_chunks = []
 
-    for idx, chunk in enumerate(chunks, start=1):
-        debug(f"Translating chunk {idx}/{len(chunks)}")
+    translated_chunks = []
+    for chunk in chunks:
         translated = GoogleTranslator(source="auto", target=target_lang).translate(chunk)
         translated_chunks.append(translated if translated else "")
 
@@ -141,7 +74,6 @@ def translate_long_text(text: str, target_lang: str) -> str:
 
 
 def write_docx(text: str, output_path: str) -> None:
-    debug(f"Writing DOCX: {output_path}")
     doc = Document()
 
     for line in text.splitlines():
@@ -153,7 +85,7 @@ def write_docx(text: str, output_path: str) -> None:
 
 
 def register_font() -> str:
-    candidates = [
+    font_candidates = [
         BASE_DIR / "fonts" / "DejaVuSans.ttf",
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
         Path("/usr/share/fonts/dejavu/DejaVuSans.ttf"),
@@ -162,25 +94,22 @@ def register_font() -> str:
         Path("C:/Windows/Fonts/Nirmala.ttf"),
     ]
 
-    for font_path in candidates:
+    for font_path in font_candidates:
         if font_path.exists():
             try:
                 pdfmetrics.registerFont(TTFont("CustomUnicode", str(font_path)))
-                debug(f"Using font: {font_path}")
                 return "CustomUnicode"
-            except Exception as e:
-                debug(f"Font register failed: {e}")
+            except Exception:
+                continue
 
-    debug("Using fallback font: Helvetica")
     return "Helvetica"
 
 
 def write_pdf(text: str, output_path: str) -> None:
-    debug(f"Writing PDF: {output_path}")
-
     font_name = register_font()
+
     pdf = canvas.Canvas(output_path, pagesize=A4)
-    _, height = A4
+    width, height = A4
 
     left_margin = 40
     top_margin = height - 50
@@ -213,8 +142,6 @@ def write_pdf(text: str, output_path: str) -> None:
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
-        debug("Form submitted")
-
         if "file" not in request.files:
             flash("No file selected.")
             return redirect(url_for("index"))
@@ -239,21 +166,18 @@ def index():
         input_path = UPLOAD_FOLDER / filename
         file.save(input_path)
 
-        debug(f"Uploaded file saved: {input_path}")
-
         try:
             ext = input_path.suffix.lower()
 
             if ext == ".pdf":
                 extracted_text = extract_text_from_pdf(str(input_path))
-                if not extracted_text.strip():
-                    debug("Normal extraction failed, switching to OCR")
-                    extracted_text = ocr_extract_text_from_pdf(str(input_path))
             else:
                 extracted_text = extract_text_from_docx(str(input_path))
 
             if not extracted_text.strip():
-                raise ValueError("OCR ke baad bhi text nahi mila.")
+                raise ValueError(
+                    "PDF me readable text nahi mila. Agar file scanned hai to OCR required hoga."
+                )
 
             translated_text = translate_long_text(extracted_text, target_lang)
 
@@ -265,8 +189,6 @@ def index():
             else:
                 write_docx(translated_text, str(output_path))
 
-            debug(f"Output created: {output_path}")
-
             return render_template(
                 "result.html",
                 filename=output_name,
@@ -274,7 +196,6 @@ def index():
             )
 
         except Exception as e:
-            debug(f"ERROR: {e}")
             flash(f"Error: {str(e)}")
             return redirect(url_for("index"))
 
@@ -293,5 +214,4 @@ def download_file(filename):
 
 
 if __name__ == "__main__":
-    debug("App started at http://127.0.0.1:5000")
     app.run(debug=True)
