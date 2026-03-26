@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Translation Result</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f7fb;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 14px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            color: #1b2a4a;
+            text-align: center;
+        }
+
+        .actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+
+        a.button {
+            text-decoration: none;
+            background: #1b4ed8;
+            color: white;
+            padding: 12px 18px;
+            border-radius: 8px;
+            font-weight: bold;
+        }
+
+        a.button:hover {
+            background: #163ea8;
+        }
+
+        pre {
+            background: #f7f8fb;
+            padding: 18px;
+            border-radius: 10px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            border: 1px solid #e3e7ef;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Translation Completed</h1>
+
+        <div class="actions">
+            <a class="button" href="{{ url_for('download_file', filename=filename) }}">Download File</a>
+            <a class="button" href="{{ url_for('index') }}">Translate Another File</a>
+        </div>
+
+        <h3>Preview</h3>
+        <pre>{{ preview }}</pre>
+    </div>
+</body>
+</html>

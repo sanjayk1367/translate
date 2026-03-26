@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PDF Translator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f7fb;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 700px;
+            margin: 60px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 14px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+        }
+
+        h1 {
+            text-align: center;
+            color: #1b2a4a;
+        }
+
+        p {
+            text-align: center;
+            color: #555;
+        }
+
+        label {
+            display: block;
+            margin-top: 18px;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #222;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            font-size: 15px;
+        }
+
+        button {
+            margin-top: 24px;
+            background: #1b4ed8;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #163ea8;
+        }
+
+        .flash {
+            background: #ffe5e5;
+            color: #a60000;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+        }
+
+        .info {
+            background: #eef4ff;
+            color: #1b2a4a;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PDF / DOCX Translator</h1>
+        <p>Upload file, choose language, and download translated output.</p>
+
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for msg in messages %}
+              <div class="flash">{{ msg }}</div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        <form method="POST" enctype="multipart/form-data">
+            <label for="file">Choose PDF or DOCX file</label>
+            <input type="file" name="file" id="file" accept=".pdf,.docx" required />
+
+            <label for="language">Target Language</label>
+            <select name="language" id="language">
+                <option value="en">English</option>
+                <option value="hi">Hindi</option>
+                <option value="gu">Gujarati</option>
+                <option value="fr">French</option>
+                <option value="es">Spanish</option>
+                <option value="de">German</option>
+                <option value="ar">Arabic</option>
+                <option value="ur">Urdu</option>
+            </select>
+
+            <label for="format">Output Format</label>
+            <select name="format" id="format">
+                <option value="pdf">PDF</option>
+                <option value="docx">DOCX</option>
+            </select>
+
+            <button type="submit">Translate File</button>
+        </form>
+
+        <div class="info">
+            Note: Agar PDF scanned image wali hai, to normal text extraction kaam nahi karega.
+        </div>
+    </div>
+</body>
+</html>
